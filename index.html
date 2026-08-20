@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FPL Maths Lab — pick your team like a scientist</title>
+<style>
+  .viz-root, :root {
+    color-scheme: light;
+    --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,0.10);
+    --blue:#2a78d6; --blue-soft:#cde2fb; --blue-mid:#86b6ef;
+    --orange:#eb6834; --aqua:#1baf7a; --violet:#4a3aa7;
+    --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --critical:#d03b3b;
+    --good-text:#006300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,0.10);
+      --blue:#3987e5; --blue-soft:#104281; --blue-mid:#1c5cab;
+      --orange:#d95926; --aqua:#199e70; --violet:#9085e9;
+      --good-text:#0ca30c;
+    }
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background:var(--page); color:var(--ink); line-height:1.45; padding:16px; max-width:1180px; margin:0 auto;
+  }
+  h1 { font-size:1.7rem; letter-spacing:-0.02em; }
+  h2 { font-size:1.15rem; margin-bottom:8px; }
+  h3 { font-size:1rem; }
+  .sub { color:var(--ink2); font-size:0.95rem; margin-top:2px; }
+  .card { background:var(--surface); border:1px solid var(--ring); border-radius:14px; padding:16px; }
+  header.top { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .deadline { text-align:right; }
+  .deadline .big { font-size:1.25rem; font-weight:700; }
+  .deadline .lbl { color:var(--muted); font-size:0.8rem; text-transform:uppercase; letter-spacing:0.04em; }
+
+  nav.tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+  nav.tabs button {
+    font:inherit; font-weight:600; font-size:0.92rem; padding:9px 14px; border-radius:999px;
+    border:1px solid var(--ring); background:var(--surface); color:var(--ink2); cursor:pointer;
+  }
+  nav.tabs button.on { background:var(--blue); border-color:var(--blue); color:#fff; }
+  section.tabpane { display:none; }
+  section.tabpane.on { display:block; }
+
+  /* ---------- squad builder layout ---------- */
+  .builder { display:grid; grid-template-columns: 1fr 320px; gap:14px; align-items:start; }
+  @media (max-width: 900px) { .builder { grid-template-columns:1fr; } }
+
+  .filters { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; align-items:center; }
+  .filters button, .filters select, .filters input {
+    font:inherit; font-size:0.88rem; padding:6px 11px; border-radius:8px; border:1px solid var(--ring);
+    background:var(--surface); color:var(--ink); cursor:pointer;
+  }
+  .filters button.on { background:var(--blue); color:#fff; border-color:var(--blue); }
+  .filters input { width:130px; cursor:text; }
+
+  table.players { width:100%; border-collapse:collapse; font-size:0.9rem; }
+  table.players th {
+    text-align:left; color:var(--muted); font-size:0.74rem; text-transform:uppercase; letter-spacing:0.04em;
+    padding:6px 8px; border-bottom:1px solid var(--baseline); cursor:pointer; white-space:nowrap;
+  }
+  table.players th.sorted { color:var(--blue); }
+  table.players td { padding:7px 8px; border-bottom:1px solid var(--grid); vertical-align:middle; }
+  table.players tr.inteam td { background:color-mix(in srgb, var(--blue) 9%, transparent); }
+  table.players tr:hover td { background:color-mix(in srgb, var(--blue) 16%, transparent); }
+  table.players tr { cursor:pointer; }
+  .pname { font-weight:650; }
+  .tchip { font-size:0.72rem; font-weight:700; color:var(--ink2); background:var(--page); border:1px solid var(--ring); padding:1px 5px; border-radius:5px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .crowdbar { display:inline-block; width:44px; height:6px; background:var(--grid); border-radius:3px; vertical-align:middle; margin-right:5px; overflow:hidden; }
+  .crowdbar i { display:block; height:100%; background:var(--blue); border-radius:3px; }
+  .fixrow { display:inline-flex; gap:3px; }
+  .fx {
+    display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:20px;
+    font-size:0.68rem; font-weight:700; border-radius:5px; padding:0 4px; color:#fff;
+  }
+  .fx.d2 { background:var(--good); } .fx.d3 { background:var(--baseline); color:var(--ink); }
+  .fx.d4 { background:var(--serious); } .fx.d5 { background:var(--critical); }
+  .addbtn { font-weight:800; color:var(--blue); font-size:1.05rem; }
+  tr.inteam .addbtn { color:var(--critical); }
+
+  .squadbox { position:sticky; top:12px; }
+  .budgetbar { height:12px; background:var(--grid); border-radius:6px; overflow:hidden; margin:6px 0 2px; }
+  .budgetbar i { display:block; height:100%; background:var(--blue); border-radius:6px; transition:width 0.25s; }
+  .budgetbar i.over { background:var(--critical); }
+  .rulelist { list-style:none; margin:10px 0; font-size:0.88rem; }
+  .rulelist li { padding:3px 0; color:var(--ink2); }
+  .rulelist li.ok { color:var(--good-text); font-weight:600; }
+  .posgroup { margin-top:10px; }
+  .posgroup h4 { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); border-bottom:1px solid var(--grid); padding-bottom:3px; }
+  .sqrow { display:flex; justify-content:space-between; align-items:center; padding:4px 2px; font-size:0.88rem; border-bottom:1px dashed var(--grid); }
+  .sqrow .x { color:var(--critical); font-weight:800; cursor:pointer; padding:0 6px; }
+  .sqrow .slot { color:var(--muted); font-style:italic; }
+  .statline { display:flex; gap:14px; margin-top:10px; flex-wrap:wrap; }
+  .stat { flex:1; min-width:80px; }
+  .stat .v { font-size:1.3rem; font-weight:750; }
+  .stat .l { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; }
+
+  /* ---------- captain duel ---------- */
+  .duel { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:700px){ .duel { grid-template-columns:1fr; } }
+  .duelcard select { font:inherit; width:100%; padding:8px; border-radius:8px; border:1px solid var(--ring); background:var(--surface); color:var(--ink); margin-bottom:10px; }
+  .bigep { font-size:2.2rem; font-weight:800; }
+  .epbar { height:18px; border-radius:5px; background:var(--blue); margin:6px 0; }
+  .dots { display:flex; flex-wrap:wrap; gap:4px; margin:8px 0; }
+  .dot { width:26px; height:26px; border-radius:6px; background:var(--blue-soft); color:var(--ink); display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:700; border:1px solid var(--ring); }
+  .verdict { margin-top:14px; border-left:4px solid var(--blue); padding:10px 14px; background:color-mix(in srgb, var(--blue) 7%, transparent); border-radius:0 10px 10px 0; }
+
+  /* ---------- fixtures ---------- */
+  table.fixmap { width:100%; border-collapse:collapse; font-size:0.88rem; }
+  table.fixmap th { text-align:left; color:var(--muted); font-size:0.74rem; text-transform:uppercase; padding:6px; border-bottom:1px solid var(--baseline); }
+  table.fixmap td { padding:5px 6px; border-bottom:1px solid var(--grid); }
+  .legend { display:flex; gap:10px; flex-wrap:wrap; margin:8px 0; font-size:0.8rem; color:var(--ink2); align-items:center; }
+
+  /* ---------- simulator ---------- */
+  .simgrid { display:grid; grid-template-columns: 300px 1fr; gap:14px; }
+  @media (max-width:800px){ .simgrid { grid-template-columns:1fr; } }
+  .simbtns { display:flex; gap:8px; margin:10px 0; flex-wrap:wrap; }
+  .simbtns button { font:inherit; font-weight:700; padding:10px 16px; border-radius:10px; border:none; background:var(--blue); color:#fff; cursor:pointer; }
+  .simbtns button.alt { background:var(--surface); color:var(--ink); border:1px solid var(--ring); }
+  .matchlist { font-size:0.86rem; max-height:340px; overflow:auto; }
+  .matchlist .sqrow b.hot { color:var(--good-text); }
+  #histo { width:100%; height:230px; display:block; }
+  .histnote { font-size:0.85rem; color:var(--ink2); margin-top:6px; }
+  .tiles { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .tile { flex:1; min-width:100px; background:var(--page); border:1px solid var(--ring); border-radius:10px; padding:10px; }
+  .tile .v { font-size:1.4rem; font-weight:800; }
+  .tile .l { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; }
+
+  /* ---------- learn ---------- */
+  .lessons { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:14px; }
+  .lesson h3 { margin-bottom:6px; }
+  .lesson p { font-size:0.92rem; color:var(--ink2); margin-bottom:8px; }
+  .lesson .try { font-size:0.88rem; background:var(--page); border:1px dashed var(--baseline); border-radius:8px; padding:8px 10px; }
+  details.quiz { margin-top:8px; font-size:0.9rem; }
+  details.quiz summary { cursor:pointer; font-weight:650; color:var(--blue); }
+  details.quiz div { padding:6px 0 0; color:var(--ink2); }
+
+  .grownups p { max-width:72ch; margin-bottom:10px; font-size:0.95rem; }
+  .grownups h3 { margin:14px 0 4px; }
+
+  .toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--page); padding:9px 16px; border-radius:10px; font-size:0.9rem; opacity:0; pointer-events:none; transition:opacity 0.25s; z-index:50; }
+  .toast.show { opacity:1; }
+  footer { margin-top:20px; color:var(--muted); font-size:0.78rem; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <h1>⚽ FPL Maths Lab</h1>
+    <div class="sub">Pick your Fantasy Premier League team like a scientist — with real player data.</div>
+  </div>
+  <div class="deadline card">
+    <div class="lbl" id="dl-label">Gameweek 1 deadline</div>
+    <div class="big" id="countdown">—</div>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-t="build" class="on">🛠️ Pick your team</button>
+  <button data-t="duel">🥊 Captain duel</button>
+  <button data-t="fix">📅 Fixture map</button>
+  <button data-t="sim">🎲 Dress rehearsal</button>
+  <button data-t="learn">🧠 Learn the maths</button>
+  <button data-t="parents">👨‍👦 For grown-ups</button>
+</nav>
+
+<!-- ============ SQUAD BUILDER ============ -->
+<section class="tabpane on" id="pane-build">
+  <div class="builder">
+    <div class="card">
+      <h2>Player market</h2>
+      <div class="sub">Tap a player to add them to your squad. Tap again to remove. <b>Guess pts</b> is this week only; <b>3-wk pts</b> looks three games ahead — a player with a hard game NOW but easy games NEXT might be worth planning for!</div>
+      <div class="filters">
+        <button data-pos="0" class="on">All</button>
+        <button data-pos="1">GK</button>
+        <button data-pos="2">DEF</button>
+        <button data-pos="3">MID</button>
+        <button data-pos="4">FWD</button>
+        <input id="search" placeholder="Search name…">
+        <select id="maxprice">
+          <option value="99">Any price</option>
+          <option value="5">≤ £5.0m</option>
+          <option value="6">≤ £6.0m</option>
+          <option value="7.5">≤ £7.5m</option>
+          <option value="9">≤ £9.0m</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto">
+      <table class="players">
+        <thead><tr>
+          <th data-k="name">Player</th>
+          <th data-k="pos">Pos</th>
+          <th data-k="price" class="num">Price</th>
+          <th data-k="sel" title="How many managers in the world picked them">Crowd&nbsp;%</th>
+          <th data-k="ep" title="FPL's guess at next-match points">Guess&nbsp;pts</th>
+          <th data-k="val" title="Guess points per £1m — bang for your buck">Value</th>
+          <th data-k="p3" title="Our own mini model: the one-week guess re-adjusted for each of the next 3 fixtures' difficulty">3-wk&nbsp;pts</th>
+          <th>Next 3 games</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="plist"></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card squadbox">
+      <h2>Your squad</h2>
+      <div class="sub num"><b id="spent">£0.0m</b> spent of £100.0m &nbsp;·&nbsp; <span id="left">£100.0m left</span></div>
+      <div class="budgetbar"><i id="budgetfill" style="width:0%"></i></div>
+      <ul class="rulelist" id="rules"></ul>
+      <div id="squadview"></div>
+      <div class="statline">
+        <div class="stat"><div class="v num" id="sq-ep">0.0</div><div class="l">this week</div></div>
+        <div class="stat"><div class="v num" id="sq-p3">0.0</div><div class="l">next 3 weeks</div></div>
+        <div class="stat"><div class="v num" id="sq-n">0/15</div><div class="l">players</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CAPTAIN DUEL ============ -->
+<section class="tabpane" id="pane-duel">
+  <div class="card" style="margin-bottom:14px">
+    <h2>🥊 Captain duel — who deserves the armband?</h2>
+    <div class="sub">Your captain scores <b>double points</b>. Compare two players and think in "if we played this match 10 times…"</div>
+  </div>
+  <div class="duel">
+    <div class="card duelcard"><select id="duelA"></select><div id="duelAbody"></div></div>
+    <div class="card duelcard"><select id="duelB"></select><div id="duelBbody"></div></div>
+  </div>
+  <div class="verdict card" id="duelverdict"></div>
+</section>
+
+<!-- ============ FIXTURE MAP ============ -->
+<section class="tabpane" id="pane-fix">
+  <div class="card">
+    <h2>📅 Fixture map — the next 5 gameweeks</h2>
+    <div class="sub">Difficulty is a <b>prediction</b> from 2 (easy) to 5 (very hard). Teams with lots of green have the friendliest run — their players are more likely to score points. Sorted easiest first.</div>
+    <div class="legend">
+      <span><span class="fx d2">2</span> easier</span>
+      <span><span class="fx d3">3</span> medium</span>
+      <span><span class="fx d4">4</span> hard</span>
+      <span><span class="fx d5">5</span> very hard</span>
+      <span>· CAPITALS = home game</span>
+    </div>
+    <div style="overflow-x:auto"><table class="fixmap">
+      <thead><tr><th>#</th><th>Team</th><th>GW1</th><th>GW2</th><th>GW3</th><th>GW4</th><th>GW5</th><th class="num" title="Sum of difficulty — lower is friendlier">Total</th></tr></thead>
+      <tbody id="fixbody"></tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ SIMULATOR ============ -->
+<section class="tabpane" id="pane-sim">
+  <div class="card" style="margin-bottom:14px">
+    <h2>🎲 Dress rehearsal — play the gameweek before it happens</h2>
+    <div class="sub">Uses your squad's best starting XI (pick 15 players first!). Each player's score is random, but centred on their guess points — just like real football: same team, different result every time. That's called <b>variance</b>.</div>
+    <div class="simbtns">
+      <button id="sim1">▶ Play it once</button>
+      <button id="sim100" class="alt">⚡ Play it 100 times</button>
+    </div>
+  </div>
+  <div class="simgrid">
+    <div class="card"><h3>One pretend gameweek</h3><div class="matchlist" id="simlist"><p class="sub">Press "Play it once"…</p></div></div>
+    <div class="card">
+      <h3>100 pretend gameweeks</h3>
+      <svg id="histo" role="img" aria-label="Histogram of simulated squad scores"></svg>
+      <div class="histnote" id="histnote">Press "Play it 100 times" to see the shape of your luck. Tall bars = scores that happen often.</div>
+      <div class="tiles" id="simtiles"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LEARN ============ -->
+<section class="tabpane" id="pane-learn">
+  <div class="lessons" id="lessons"></div>
+</section>
+
+<!-- ============ PARENTS ============ -->
+<section class="tabpane" id="pane-parents">
+  <div class="card grownups">
+    <h2>👨‍👦 For grown-ups — how to teach with this</h2>
+    <p>This is a junior version of the solver tools you use: "guess points" is expected value, the fixture map is a difficulty model, the budget rules are constrained optimisation, and the dress-rehearsal histogram is your points-distribution panel. The ideas are identical — only the language is smaller.</p>
+    <h3>A weekly routine that works</h3>
+    <p><b>1. Fixture map first (2 min).</b> Ask: "Which teams have the friendliest games this week?" This trains reading a model's output before looking at any player.</p>
+    <p><b>2. Transfers or picks (5 min).</b> Sort the market by <i>Value</i> and ask why a £5m player can be a smarter buy than a £9m one. That's expected value per unit cost — the core solver idea.</p>
+    <p><b>3. Captain duel (3 min).</b> Frame everything as "out of 10 matches like this one…". It converts expected value from an abstract decimal into counting, which 9-year-olds handle brilliantly.</p>
+    <p><b>4. After the deadline: dress rehearsal.</b> Run 100 simulations, write down the mean, then compare with the real score at the weekend. Ask: "Were we unlucky, or wrong?" — the single most valuable idea in all of this (judge the decision, not the outcome).</p>
+    <h3>Concepts he'll absorb, in order</h3>
+    <p>Averages and expected value → value for money (ratios) → probability as long-run counting → variance and distributions → sample size ("one great week proves nothing") → wisdom of the crowd (ownership %) → process vs luck. Each lesson card in "Learn the maths" matches one of these and ends with a question to talk about together.</p>
+    <h3>Honest notes on the data</h3>
+    <p><b>The 3-wk pts column is our own mini model</b> — and a lovely thing to build understanding around. We take FPL's one-week guess, strip out the effect of the next fixture's difficulty (÷ its multiplier), then re-apply a multiplier for each of the next three fixtures (easy ×1.15, medium ×1.0, hard ×0.85, very hard ×0.7) and add them up. Walk him through it once — it's exactly how your solver thinks about a horizon, in miniature, and it shows him that models are built by people making reasonable assumptions, not magic.</p>
+    <p>Player list, prices, ownership and "guess points" come from the official FPL API (top 150 most-picked players); fixture difficulty is FPL's official FDR. Early-season guess points are crude — a fun discussion in itself: "Why might the computer's guess be bad in week 1?" (Small sample!) Ask Claude to refresh this dashboard with new data whenever you like — or set up a weekly refresh.</p>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+<footer>Data: official Fantasy Premier League API, 20 Aug 2026 · 2026/27 season · Built for a 9-year-old scientist and his dad.</footer>
+
+<script>
+/* ================= DATA (FPL API snapshot, 20 Aug 2026) ================= */
+const TEAMS = {1:["Arsenal","ARS"],2:["Aston Villa","AVL"],3:["Bournemouth","BOU"],4:["Brentford","BRE"],5:["Brighton","BHA"],6:["Chelsea","CHE"],7:["Coventry City","COV"],8:["Crystal Palace","CRY"],9:["Everton","EVE"],10:["Fulham","FUL"],11:["Hull City","HUL"],12:["Ipswich Town","IPS"],13:["Leeds","LEE"],14:["Liverpool","LIV"],15:["Man City","MCI"],16:["Man Utd","MUN"],17:["Newcastle","NEW"],18:["Nott'm Forest","NFO"],19:["Spurs","TOT"],20:["Sunderland","SUN"]};
+const POS = {1:"GK",2:"DEF",3:"MID",4:"FWD"};
+const DEADLINE = new Date("2026-08-21T17:30:00Z");
+/* [name, teamId, pos, price£m, crowd%, guessPts] */
+const P = [["Haaland",15,4,15.5,69.5,4],["João Pedro",6,4,7.5,61.7,2.3],["B.Fernandes",16,3,12,49.8,4],["Szoboszlai",14,3,7,41.4,2.5],["Raya",1,1,6,35.8,4],["Mbeumo",16,3,8,33.4,2.8],["Calafiori",1,2,5.5,31.2,2.5],["Gabriel",1,2,8,29.4,4],["Calvert-Lewin",13,4,6,28.6,2],["Semenyo",15,3,8.5,26.5,2.9],["Rogers",6,3,7.5,26,2.6],["Pedro Porro",19,2,5.5,22.8,2.5],["Kinsky",19,1,4.5,21.9,1.9],["Shaw",16,2,4.5,21.7,1.7],["O'Reilly",15,2,6.5,21.5,3.1],["Dubravka",19,1,4,21.1,1],["Verbruggen",5,1,4.5,19.7,1.9],["Rice",1,3,7.5,19.3,2.6],["Guéhi",15,2,6,19.1,2.8],["Tzolis",1,3,6.5,18.6,2.3],["Virgil",14,2,6.5,18.5,3.1],["Diop",12,2,4,18,1],["Thiago",4,4,8,17.9,2.5],["Lammens",16,1,5,17.8,2.6],["Konsa",2,2,4.5,16.1,1.7],["Isak",14,4,9,16.1,2.7],["Ndiaye",9,3,6,15.8,2.1],["Brobbey",20,4,6,14.9,2],["Maguire",16,2,5,14.5,2.2],["van Ewijk",7,2,4,14.3,1],["Wirtz",14,3,7.5,14.1,2.6],["Groß",5,3,5.5,13.1,2],["Gibbs-White",18,3,8,12,2.8],["Watkins",2,4,8,11.7,2.5],["E.Le Fée",20,3,6,11.5,2.1],["Gvardiol",15,2,5.5,11.4,2.5],["Hughes",8,3,4.5,11.3,1],["Cunha",16,3,8,10.9,2.8],["N.Williams",18,2,5,10.7,2.2],["Palmer",6,3,9.5,10.6,3.2],["Muñoz",8,2,5.5,10.5,2.5],["Gyökeres",1,4,7.5,10.2,2.3],["Lacroix",6,2,6,10.1,2.8],["Mosquera",1,2,5.5,9.4,2.5],["Saka",1,3,9.5,9.4,3.2],["Tarkowski",9,2,6,9.4,2.8],["James",6,2,5.5,9.2,2.5],["Van Hecke",19,2,5,9.2,2.2],["Senesi",19,2,6,9.1,2.8],["Donnarumma",15,1,5.5,9,3.3],["Anderson",15,3,6.5,9,2.3],["Bruno G.",1,3,7,8.5,2.5],["Cash",2,2,4.5,8.5,1.7],["Pickford",9,1,5.5,8.3,3.3],["Cherki",15,3,7.5,7.9,2.6],["Thomas",7,2,4,7.8,1],["Kusi-Asare",10,4,4.5,7.4,1],["Van de Ven",19,2,5,7.3,2.2],["Wilson",13,3,6.5,7,2.3],["Mitchell",8,2,4.5,6.6,1.7],["Ødegaard",1,3,6.5,6.4,2.3],["Hume",20,2,4.5,6.2,1.7],["Mateta",8,4,6.5,6,2.1],["Kelleher",4,1,5,5.9,2.6],["Sarr",8,3,6.5,5.7,2.3],["Davis",12,2,4,5.2,1],["Enzo",6,3,7,5.1,2.5],["Palmer",12,1,4,5.1,1],["Truffert",3,2,5.5,4.8,2.5],["Igor Jesus",18,4,6,4.8,2],["Ballard",20,2,5,4.8,2.2],["Havertz",1,4,7.5,4.7,2.3],["Roefs",20,1,5,4.7,2.6],["Martinez",2,1,5,4.6,2.6],["Xhaka",20,3,5.5,4.6,2],["Foden",15,3,7,4.5,2.5],["Steele",5,1,4,4.3,1],["Kerkez",14,2,5.5,4.1,2.5],["Tonali",19,3,5.5,4.1,2],["Caicedo",6,3,5.5,3.9,2],["Aina",18,2,4.5,3.9,1.7],["A.Becker",14,1,5.5,3.7,3.3],["Gakpo",14,3,7,3.6,2.5],["Hall",17,2,5,3.6,2.2],["White",1,2,5.5,3.5,2.5],["Petrović",3,1,4.5,3.5,1.9],["Kayode",4,2,4.5,3.4,1.7],["Schade",4,3,6,3.4,2.1],["Dewsbury-Hall",9,3,6.5,3.4,2.3],["Frimpong",14,2,5.5,3.3,2.5],["Robertson",19,2,4.5,3.3,1.7],["O'Nien",20,2,4,3.3,1],["McGinn",2,3,5.5,3.2,2],["Forster",3,1,4,3.2,1],["Henderson",8,1,5,3.2,2.6],["Leno",10,1,4.5,3.2,1.9],["O'Shea",12,2,4,3.2,1],["F.Kadıoğlu",5,2,4.5,3.1,1.7],["Rayan",3,3,6.5,3,2.3],["Gomez",5,3,5,2.9,1.5],["Beto",9,4,5.5,2.9,1.8],["Muharemović",13,2,5,2.9,2.2],["Trafford",13,1,5,2.9,2.6],["Dalot",16,2,5,2.9,2.2],["Palestra",6,2,5.5,2.8,2.5],["Rodon",13,2,4.5,2.8,1.7],["Richarlison",19,4,6,2.8,2],["Sangaré",4,3,5.5,2.7,2],["Targett",11,2,4,2.7,1],["Vuskovic",5,2,5,2.6,2.2],["Ajer",4,2,4.5,2.5,1.7],["Slater",11,3,4.5,2.5,1],["Burn",17,2,5,2.5,2.2],["Hincapie",1,2,5.5,2.4,2.5],["Eze",1,3,6.5,2.3,2.3],["Jacquet",14,2,5,2.3,2.2],["Tielemans",16,3,6,2.3,2.1],["Evanilson",3,4,6,2.2,2],["Sánchez",6,1,5,2.2,2.6],["Walle Egeli",12,4,4.5,2.2,1],["Fernandes",19,3,6,2.2,2.1],["Welbeck",6,4,6,2.1,2],["Milenković",18,2,5.5,2.1,2.5],["Collins",4,2,5.5,2,2.5],["Gonzalo",10,4,6,2,2],["Dovin",7,1,4,1.9,1],["Robinson",10,2,4.5,1.9,1.7],["Gravenberch",14,3,6,1.9,2.1],["Araujo",14,2,5.5,1.9,2.5],["Branthwaite",9,2,5.5,1.8,2.5],["Mac Allister",14,3,5.5,1.8,2],["Khusanov",15,2,5.5,1.8,2.5],["Thiaw",17,2,5,1.8,2.2],["Wood",18,4,6,1.8,2],["A.García",2,2,4,1.7,1],["Tavernier",3,3,6,1.7,2.1],["De Cuyper",5,2,4.5,1.7,1.7],["Colwill",6,2,5,1.7,2.2],["Matthews",8,1,4,1.7,1],["Keane",9,2,5,1.7,2.2],["Phillips",11,1,4,1.7,1],["Egan",11,2,4,1.7,1],["Woltemade",17,4,6,1.7,2],["Rúben",15,2,5.5,1.6,2.5],["Amad",16,3,6,1.6,2.1],["Wissa",17,4,6,1.6,2],["Sels",18,1,5,1.6,2.6],["Solanke",19,4,6,1.6,2],["Scarlett",19,4,4.5,1.6,1],["Scott",3,3,6,1.5,2.1]];
+/* per team: next 5 fixtures [oppId, home?, difficulty, gw] */
+const FIX = {1:[[7,1,2,1],[2,0,4,2],[6,1,4,3],[20,0,3,4],[5,0,3,5]],2:[[5,0,3,1],[1,1,4,2],[11,0,2,3],[18,1,3,4],[19,0,3,5]],3:[[15,0,5,1],[9,1,3,2],[17,0,3,3],[4,1,3,4],[14,1,4,5]],4:[[19,1,3,1],[13,0,3,2],[20,1,2,3],[3,0,3,4],[6,1,4,5]],5:[[2,1,3,1],[6,0,4,2],[13,1,2,3],[7,0,2,4],[1,1,4,5]],6:[[10,0,3,1],[5,1,2,2],[1,0,5,3],[11,1,2,4],[4,0,3,5]],7:[[1,0,5,1],[11,1,2,2],[15,0,5,3],[5,1,2,4],[18,0,3,5]],8:[[9,0,3,1],[15,1,4,2],[10,0,3,3],[12,1,2,4],[13,0,3,5]],9:[[8,1,3,1],[3,0,3,2],[16,1,4,3],[19,0,3,4],[12,1,2,5]],10:[[6,1,4,1],[20,0,3,2],[8,1,3,3],[14,0,4,4],[16,1,4,5]],11:[[16,1,4,1],[7,0,2,2],[2,1,3,3],[6,0,4,4],[17,0,3,5]],12:[[20,1,2,1],[16,0,4,2],[14,1,4,3],[8,0,3,4],[9,0,3,5]],13:[[18,0,3,1],[4,1,3,2],[5,0,3,3],[17,1,2,4],[8,1,3,5]],14:[[17,0,3,1],[18,1,3,2],[12,0,2,3],[10,1,2,4],[3,0,3,5]],15:[[3,1,3,1],[8,0,3,2],[7,1,2,3],[16,0,4,4],[20,1,2,5]],16:[[11,0,2,1],[12,1,2,2],[9,0,3,3],[15,1,4,4],[10,0,3,5]],17:[[14,1,4,1],[19,0,3,2],[3,1,3,3],[13,0,3,4],[11,1,2,5]],18:[[13,1,2,1],[14,0,4,2],[19,1,3,3],[2,0,4,4],[7,1,2,5]],19:[[4,0,3,1],[17,1,2,2],[18,0,3,3],[9,1,3,4],[2,1,3,5]],20:[[12,0,2,1],[10,1,2,2],[4,0,3,3],[1,1,4,4],[15,0,5,5]]};
+
+/* players get stable ids; disambiguate duplicate display names by team */
+const nameCount = {};
+P.forEach(p=>{ nameCount[p[0]] = (nameCount[p[0]]||0)+1; });
+/* difficulty multiplier for our mini 3-week model: easy games boost the guess, hard games shrink it */
+const DMULT = {2:1.15, 3:1.0, 4:0.85, 5:0.7};
+function proj3(teamId, ep){
+  const fx = FIX[teamId].slice(0,3);
+  if (!fx.length) return ep*3;
+  const neutral = ep / DMULT[fx[0][2]];             // remove next game's fixture effect
+  return fx.reduce((s,f)=> s + neutral*DMULT[f[2]], 0); // re-apply it for each of the 3 fixtures
+}
+const PLAYERS = P.map((p,i)=>({
+  id:i, name:p[0], dname: nameCount[p[0]]>1 ? p[0]+" ("+TEAMS[p[1]][1]+")" : p[0],
+  team:p[1], pos:p[2], price:p[3], sel:p[4], ep:p[5], val: p[5]/p[3], p3: proj3(p[1], p[5])
+}));
+
+/* ================= STATE ================= */
+const squad = new Set();     // player ids
+const NEED = {1:2, 2:5, 3:5, 4:3};
+const BUDGET = 100.0;
+let posFilter = 0, sortKey = "sel", sortDir = -1, search = "", maxPrice = 99;
+
+/* ================= HELPERS ================= */
+const $ = s => document.querySelector(s);
+const fmt1 = x => (Math.round(x*10)/10).toFixed(1);
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2200); }
+function fixChips(teamId, n){
+  return '<span class="fixrow">'+FIX[teamId].slice(0,n).map(f=>{
+    const opp = TEAMS[f[0]][1];
+    const label = f[1] ? opp.toUpperCase() : opp.toLowerCase();
+    return `<span class="fx d${f[2]}" title="GW${f[3]}: ${f[1]?'home':'away'} v ${TEAMS[f[0]][0]}, difficulty ${f[2]}/5">${label}</span>`;
+  }).join('')+'</span>';
+}
+const spent = () => [...squad].reduce((s,id)=>s+PLAYERS[id].price,0);
+const posCount = pos => [...squad].filter(id=>PLAYERS[id].pos===pos).length;
+const clubCount = t => [...squad].filter(id=>PLAYERS[id].team===t).length;
+
+/* ================= SQUAD BUILDER ================= */
+function togglePlayer(id){
+  const p = PLAYERS[id];
+  if (squad.has(id)) { squad.delete(id); renderAll(); return; }
+  if (squad.size >= 15) return toast("Squad is full (15). Remove someone first!");
+  if (posCount(p.pos) >= NEED[p.pos]) return toast(`You already have ${NEED[p.pos]} ${POS[p.pos]}s — that's the limit.`);
+  if (clubCount(p.team) >= 3) return toast(`Max 3 players from ${TEAMS[p.team][0]} — spread your risk!`);
+  if (spent() + p.price > BUDGET + 1e-9) return toast(`Not enough money! ${p.name} costs £${fmt1(p.price)}m but you only have £${fmt1(BUDGET-spent())}m.`);
+  squad.add(id); renderAll();
+}
+function renderMarket(){
+  let rows = PLAYERS.filter(p =>
+    (posFilter===0 || p.pos===posFilter) &&
+    p.price <= maxPrice &&
+    (!search || p.dname.toLowerCase().includes(search) || TEAMS[p.team][0].toLowerCase().includes(search)));
+  rows.sort((a,b)=>{
+    if (sortKey==="name") return sortDir * a.name.localeCompare(b.name);
+    if (sortKey==="pos") return sortDir * (a.pos - b.pos);
+    return sortDir * (a[sortKey] - b[sortKey]);
+  });
+  $("#plist").innerHTML = rows.map(p=>`
+    <tr class="${squad.has(p.id)?'inteam':''}" data-id="${p.id}">
+      <td class="pname">${p.dname} <span class="tchip">${TEAMS[p.team][1]}</span></td>
+      <td>${POS[p.pos]}</td>
+      <td class="num">£${fmt1(p.price)}m</td>
+      <td class="num"><span class="crowdbar"><i style="width:${Math.min(100,p.sel)}%"></i></span>${fmt1(p.sel)}%</td>
+      <td class="num">${fmt1(p.ep)}</td>
+      <td class="num">${(p.val).toFixed(2)}</td>
+      <td class="num"><b>${fmt1(p.p3)}</b></td>
+      <td>${fixChips(p.team,3)}</td>
+      <td class="addbtn">${squad.has(p.id)?'−':'+'}</td>
+    </tr>`).join("");
+  document.querySelectorAll("#plist tr").forEach(tr=>tr.onclick = ()=>togglePlayer(+tr.dataset.id));
+  document.querySelectorAll("table.players th[data-k]").forEach(th=>{
+    th.classList.toggle("sorted", th.dataset.k===sortKey ||(th.dataset.k==="val"&&sortKey==="val"));
+  });
+}
+function renderSquad(){
+  const sp = spent();
+  $("#spent").textContent = "£"+fmt1(sp)+"m";
+  $("#left").textContent = "£"+fmt1(BUDGET-sp)+"m left";
+  const fill = $("#budgetfill");
+  fill.style.width = Math.min(100, sp/BUDGET*100)+"%";
+  fill.classList.toggle("over", sp>BUDGET);
+  const rules = [
+    [squad.size===15, `15 players picked (${squad.size}/15)`],
+    [posCount(1)===2, `2 goalkeepers (${posCount(1)}/2)`],
+    [posCount(2)===5, `5 defenders (${posCount(2)}/5)`],
+    [posCount(3)===5, `5 midfielders (${posCount(3)}/5)`],
+    [posCount(4)===3, `3 forwards (${posCount(4)}/3)`],
+    [sp<=BUDGET, `Under £100m budget`],
+  ];
+  $("#rules").innerHTML = rules.map(r=>`<li class="${r[0]?'ok':''}">${r[0]?'✅':'⬜'} ${r[1]}</li>`).join("");
+  let html = "";
+  for (const pos of [1,2,3,4]) {
+    const ids = [...squad].filter(id=>PLAYERS[id].pos===pos);
+    html += `<div class="posgroup"><h4>${POS[pos]} — ${ids.length}/${NEED[pos]}</h4>`;
+    html += ids.map(id=>{
+      const p=PLAYERS[id];
+      return `<div class="sqrow"><span><b>${p.dname}</b> <span class="tchip">${TEAMS[p.team][1]}</span></span>
+        <span class="num">£${fmt1(p.price)}m · ${fmt1(p.ep)}pts <span class="x" data-id="${id}" title="remove">×</span></span></div>`;
+    }).join("");
+    for (let i=ids.length;i<NEED[pos];i++) html += `<div class="sqrow"><span class="slot">empty slot</span></div>`;
+    html += `</div>`;
+  }
+  $("#squadview").innerHTML = html;
+  document.querySelectorAll("#squadview .x").forEach(x=>x.onclick = e=>{e.stopPropagation(); squad.delete(+x.dataset.id); renderAll();});
+  $("#sq-ep").textContent = fmt1([...squad].reduce((s,id)=>s+PLAYERS[id].ep,0));
+  $("#sq-p3").textContent = fmt1([...squad].reduce((s,id)=>s+PLAYERS[id].p3,0));
+  $("#sq-n").textContent = squad.size+"/15";
+}
+
+/* ================= CAPTAIN DUEL ================= */
+function duelOptions(){
+  const inSquad = [...squad];
+  const pool = PLAYERS.slice().sort((a,b)=>b.ep-a.ep);
+  const opts = p => `<option value="${p.id}">${p.dname} — ${POS[p.pos]}, £${fmt1(p.price)}m</option>`;
+  let html = "";
+  if (inSquad.length){
+    html += `<optgroup label="Your squad">${inSquad.map(id=>opts(PLAYERS[id])).join("")}</optgroup>`;
+  }
+  html += `<optgroup label="Everyone">${pool.map(opts).join("")}</optgroup>`;
+  $("#duelA").innerHTML = html; $("#duelB").innerHTML = html;
+  const sorted = (inSquad.length?inSquad.map(i=>PLAYERS[i]):pool).slice().sort((a,b)=>b.ep-a.ep);
+  $("#duelA").value = sorted[0]?.id ?? 0;
+  $("#duelB").value = sorted[1]?.id ?? 1;
+}
+function renderDuel(){
+  const a = PLAYERS[+$("#duelA").value], b = PLAYERS[+$("#duelB").value];
+  const maxEp = Math.max(a.ep, b.ep, 0.1);
+  const body = (p) => {
+    const ten = Math.round(p.ep*10);
+    return `
+    <div class="bigep num">${fmt1(p.ep)} <span style="font-size:0.9rem;color:var(--muted)">guess pts next game</span></div>
+    <div class="epbar" style="width:${Math.max(6,p.ep/maxEp*100)}%"></div>
+    <div class="sub">As captain (double!): <b class="num">${fmt1(p.ep*2)}</b> guess pts</div>
+    <div class="sub" style="margin-top:8px">If this match were played <b>10 times</b>, we'd expect about <b>${ten} points in total</b>:</div>
+    <div class="dots">${Array.from({length:10},()=>`<span class="dot num">${fmt1(p.ep)}</span>`).join("")}</div>
+    <div class="sub">Next game: ${fixChips(p.team,1)} &nbsp;·&nbsp; Crowd: <b class="num">${fmt1(p.sel)}%</b> picked ${p.name}</div>`;
+  };
+  $("#duelAbody").innerHTML = body(a);
+  $("#duelBbody").innerHTML = body(b);
+  const diff = Math.abs(a.ep-b.ep), win = a.ep>=b.ep?a:b, lose = a.ep>=b.ep?b:a;
+  let verdict;
+  if (a.id===b.id) verdict = "That's the same player twice! Pick two different players to compare. 😄";
+  else if (diff < 0.3) verdict = `<b>Too close to call!</b> ${a.name} and ${b.name} are only ${fmt1(diff)} guess points apart — that tiny difference is smaller than normal match-to-match luck. Either is a fine captain; you could use a tie-breaker like the easier fixture.`;
+  else verdict = `<b>The maths leans towards ${win.name}.</b> Over 10 matches you'd expect about ${Math.round(win.ep*10)} points vs ${Math.round(lose.ep*10)} for ${lose.name} — a gap of ${Math.round(diff*10)} points. As captain that gap <b>doubles</b>. Remember: ${lose.name} can still outscore ${win.name} this week — a good decision isn't a guarantee, it's playing the better odds.`;
+  $("#duelverdict").innerHTML = "🧑‍⚖️ " + verdict;
+}
+
+/* ================= FIXTURE MAP ================= */
+function renderFix(){
+  const rows = Object.keys(FIX).map(t=>({t:+t, total: FIX[t].reduce((s,f)=>s+f[2],0)}))
+    .sort((a,b)=>a.total-b.total);
+  $("#fixbody").innerHTML = rows.map((r,i)=>{
+    const cells = FIX[r.t].map(f=>{
+      const opp = TEAMS[f[0]][1];
+      return `<td><span class="fx d${f[2]}" title="${f[1]?'home':'away'} v ${TEAMS[f[0]][0]}, difficulty ${f[2]}/5">${f[1]?opp.toUpperCase():opp.toLowerCase()}</span></td>`;
+    }).join("");
+    return `<tr><td class="num">${i+1}</td><td><b>${TEAMS[r.t][0]}</b></td>${cells}<td class="num"><b>${r.total}</b></td></tr>`;
+  }).join("");
+}
+
+/* ================= SIMULATOR ================= */
+function bestXI(){
+  if (squad.size<15) return null;
+  const by = pos => [...squad].map(i=>PLAYERS[i]).filter(p=>p.pos===pos).sort((a,b)=>b.ep-a.ep);
+  const gk = by(1).slice(0,1), def = by(2), mid = by(3), fwd = by(4);
+  const xi = [...gk, ...def.slice(0,3), ...mid.slice(0,2), ...fwd.slice(0,1)];
+  const rest = [...def.slice(3), ...mid.slice(2), ...fwd.slice(1)].sort((a,b)=>b.ep-a.ep);
+  xi.push(...rest.slice(0, 11-xi.length));
+  return xi;
+}
+function samplePts(ep){
+  /* random score centred near ep: blanks are common, big hauls are rare — like real football */
+  const r = Math.random();
+  if (r < 0.30) return Math.random()<0.5?1:2;                    // quiet game
+  if (r < 0.85) return Math.max(0, Math.round(ep + (Math.random()*2-1)*ep*0.8)); // normal-ish game
+  return Math.round(ep*2 + Math.random()*ep*2.5);                // haul!
+}
+function simOnce(xi){
+  const scores = xi.map(p=>({p, pts: samplePts(p.ep)}));
+  const cap = scores.slice().sort((a,b)=>b.p.ep-a.p.ep)[0];
+  cap.captain = true;
+  const total = scores.reduce((s,x)=>s+x.pts*(x.captain?2:1),0);
+  return {scores, total};
+}
+function runOne(){
+  const xi = bestXI();
+  if (!xi) { toast("Pick your full 15-player squad first!"); showTab("build"); return; }
+  const sim = simOnce(xi);
+  const expTot = Math.round(xi.reduce((s,p)=>s+p.ep,0) + Math.max(...xi.map(p=>p.ep)));
+  $("#simlist").innerHTML = sim.scores.map(x=>`
+    <div class="sqrow"><span>${x.captain?'©️ ':''}<b>${x.p.dname}</b> <span class="tchip">${TEAMS[x.p.team][1]}</span></span>
+    <span class="num"><b class="${x.pts>=Math.max(6,x.p.ep*2)?'hot':''}">${x.pts*(x.captain?2:1)} pts</b> <span style="color:var(--muted)">(guess ${fmt1(x.p.ep)})</span></span></div>`).join("")
+    + `<div class="sqrow" style="border-top:2px solid var(--baseline)"><b>TOTAL</b><b class="num">${sim.total} pts (guess ≈ ${expTot})</b></div>
+    <p class="sub" style="margin-top:6px">Run it again — same team, different score. That's variance! ©️ = captain (points doubled).</p>`;
+}
+function run100(){
+  const xi = bestXI();
+  if (!xi) { toast("Pick your full 15-player squad first!"); showTab("build"); return; }
+  const totals = Array.from({length:100},()=>simOnce(xi).total).sort((a,b)=>a-b);
+  const mean = totals.reduce((s,x)=>s+x,0)/100;
+  drawHisto(totals, mean);
+  const over = t => totals.filter(x=>x>=t).length;
+  $("#simtiles").innerHTML = `
+    <div class="tile"><div class="v num">${Math.round(mean)}</div><div class="l">average (mean)</div></div>
+    <div class="tile"><div class="v num">${totals[0]}–${totals[99]}</div><div class="l">worst – best</div></div>
+    <div class="tile"><div class="v num">${over(60)}%</div><div class="l">chance of 60+ pts</div></div>
+    <div class="tile"><div class="v num">${over(80)}%</div><div class="l">chance of 80+ pts</div></div>`;
+  $("#histnote").innerHTML = `Each bar counts how many of the 100 pretend gameweeks landed on that score. The dashed line is the <b>average: ${Math.round(mean)} points</b>. Most weeks land near the middle — the far right (huge scores) is rare. This is exactly the chart the professional FPL tools show!`;
+}
+function drawHisto(totals, mean){
+  const svg = $("#histo");
+  const W = svg.clientWidth || 500, H = 230, padL = 30, padB = 24, padT = 10;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const lo = Math.floor(totals[0]/10)*10, hi = Math.ceil((totals[totals.length-1]+1)/10)*10;
+  const nb = Math.max(1,(hi-lo)/10);
+  const bins = Array(nb).fill(0);
+  totals.forEach(t=>bins[Math.min(nb-1, Math.floor((t-lo)/10))]++);
+  const maxB = Math.max(...bins);
+  const bw = (W-padL-8)/nb;
+  const y = v => padT + (H-padB-padT) * (1 - v/maxB);
+  let out = "";
+  // gridlines
+  for (let g=0; g<=4; g++){
+    const gy = padT + (H-padB-padT)*g/4;
+    out += `<line x1="${padL}" y1="${gy}" x2="${W-4}" y2="${gy}" stroke="var(--grid)" stroke-width="1"/>`;
+    out += `<text x="${padL-5}" y="${gy+4}" text-anchor="end" font-size="10" fill="var(--muted)">${Math.round(maxB*(4-g)/4)}</text>`;
+  }
+  bins.forEach((b,i)=>{
+    if (!b) return;
+    const x = padL + i*bw + 1, h = (H-padB-padT)*b/maxB;
+    out += `<g class="bar"><rect x="${x}" y="${y(b)}" width="${bw-2}" height="${h}" rx="4" fill="var(--blue)">
+      <title>${lo+i*10}–${lo+i*10+9} points: happened ${b} times out of 100</title></rect></g>`;
+  });
+  for (let i=0;i<=nb;i+=Math.ceil(nb/8)){
+    out += `<text x="${padL+i*bw}" y="${H-8}" font-size="10" fill="var(--muted)" text-anchor="middle">${lo+i*10}</text>`;
+  }
+  const mx = padL + (mean-lo)/(hi-lo)*(W-padL-8);
+  out += `<line x1="${mx}" y1="${padT}" x2="${mx}" y2="${H-padB}" stroke="var(--ink)" stroke-width="2" stroke-dasharray="5 4"/>`;
+  out += `<text x="${mx+5}" y="${padT+12}" font-size="11" font-weight="700" fill="var(--ink)">avg ${Math.round(mean)}</text>`;
+  out += `<line x1="${padL}" y1="${H-padB}" x2="${W-4}" y2="${H-padB}" stroke="var(--baseline)" stroke-width="1.5"/>`;
+  svg.innerHTML = out;
+}
+
+/* ================= LESSONS ================= */
+const LESSONS = [
+  ["📊","Averages (the mean)",
+   "A player's average tells you what usually happens. If Haaland scored 8, 2, 12, 2 and 6 points in five games, his average is (8+2+12+2+6) ÷ 5 = 6 points per game. One amazing game doesn't make someone great — the average smooths out the luck.",
+   "Try it: pick any player's last 5 scores from the FPL app and work out the mean together.",
+   "Why do we divide by 5?","Because we shared the total points equally across the 5 games — that's what an average is: the total shared out evenly."],
+  ["🔮","Expected points (the computer's guess)",
+   "\"Guess points\" is the computer's best guess for a player's NEXT game, using averages, fixtures and form. A guess of 4.0 doesn't mean he'll score exactly 4 — it means if he played that match lots of times, he'd average about 4.",
+   "Try it: find a player whose guess is 2.0 and one at 4.0. Over 10 games, how many more points would the 4.0 player get? (About 20!)",
+   "Can a 2.0 player beat a 4.0 player this week?","Yes, easily! The guess is about the long run. In one game anything can happen — that's why we play the odds, not certainties."],
+  ["🎲","Probability (chances)",
+   "Probability is how likely something is, from 0% (impossible) to 100% (certain). A striker who scores in 6 of every 10 games has a 60% scoring chance. Two quiet games in a row? That's 40% × 40% = 16% — unusual, but it will happen to every star player sometimes!",
+   "Try it: roll a dice. Before each roll, ask: what's the chance of a 6? Does rolling three 6s in a row change the next roll? (No — dice have no memory!)",
+   "If a player scores in 60% of games, how often does he blank?","40% of the time — the chances of all the things that could happen always add up to 100%."],
+  ["💰","Value for money",
+   "Value = guess points ÷ price. A £5m player guessing 2.5 points gives 0.50 points per £1m. A £10m player guessing 4.0 gives only 0.40! Sometimes the cheaper player is the smarter buy — because the money you save buys better players elsewhere.",
+   "Try it: sort the player market by the Value column. Any surprises in the top 10?",
+   "So should we only buy cheap players?","No — you have to spend the £100m on someone! The trick is mixing a few expensive stars with great-value cheaper players. That's called optimising."],
+  ["🔬","Sample size (how much proof is enough?)",
+   "Flip a coin 4 times and you might get 4 heads — that doesn't make it a magic coin. Flip it 100 times and you'll be close to 50/50. Football is the same: 2 games tell you almost nothing, 20 games tell you a lot. Be suspicious of \"hot streaks\" built on tiny samples!",
+   "Try it: flip a coin 10 times and count heads. Then do it again. Different answers from the SAME coin — that's why small samples lie.",
+   "A player scored twice in week 1. Is he now a must-have?","Maybe — but one game is a tiny sample. Check his price, his team's fixtures and his average over many games before spending."],
+  ["👥","Wisdom of the crowd",
+   "The Crowd % shows how many of the world's ~10 million managers picked each player. The crowd is often smart — millions of brains checking prices and fixtures. But if you ONLY copy the crowd you can never beat them. Great managers mostly agree with the crowd and disagree in a few clever places.",
+   "Try it: find a player the crowd loves (over 40%) and work out together why. Then find a low-crowd player YOU think is underrated — your differential!",
+   "If everyone owns Haaland and he scores, do you climb the leaderboard?","Barely — everyone got the same points! You climb when YOUR different picks come off. That's why differentials matter."],
+  ["🗺️","Forward planning (thinking ahead)",
+   "Beginners pick for THIS week. Smart managers pick for the next FEW weeks. A player with one hard game now but three easy games coming might beat a player with one easy game now and horrible ones after. That's why the market shows both a 1-week guess AND a 3-week guess — compare the columns and spot players where they disagree!",
+   "Try it: sort the market by Guess pts, then by 3-wk pts. Find a player who jumps up the list when you look 3 weeks ahead — and check the fixture map to see why.",
+   "Why not plan 10 weeks ahead?","Predictions get worse the further you look — injuries, form and team news change everything. A few weeks is the sweet spot: far enough to plan, near enough to trust. Even the professional tools rarely look past 5 or 6!"],
+  ["⚖️","Good decisions vs good luck",
+   "This is the big one. You can make a GREAT decision and still get a bad result — the best captain pick can score 2. That doesn't mean you chose wrong! Judge choices by the thinking (was it the best odds at the time?), not just the result. Casinos, weather forecasters and top FPL managers all think this way.",
+   "Try it: after each gameweek, ask two questions. 1) Did we score well? 2) Did we DECIDE well? They're different questions — and only №2 is under your control.",
+   "Our captain blanked. Should we have known?","Only if the information at the time pointed elsewhere. If he had the best guess points and an easy fixture, it was the right call that got unlucky. Same choice again next time!"],
+];
+function renderLessons(){
+  $("#lessons").innerHTML = LESSONS.map(l=>`
+    <div class="card lesson">
+      <h3>${l[0]} ${l[1]}</h3>
+      <p>${l[2]}</p>
+      <div class="try">🏠 ${l[3]}</div>
+      <details class="quiz"><summary>Quiz question: ${l[4]}</summary><div>${l[5]}</div></details>
+    </div>`).join("");
+}
+
+/* ================= TABS / COUNTDOWN / WIRING ================= */
+function showTab(t){
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("on", b.dataset.t===t));
+  document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("on", p.id==="pane-"+t));
+  if (t==="duel") { duelOptions(); renderDuel(); }
+}
+document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>showTab(b.dataset.t));
+function tickCountdown(){
+  const ms = DEADLINE - new Date();
+  if (ms <= 0) { $("#countdown").textContent = "Deadline passed — good luck!"; $("#dl-label").textContent="Gameweek 1"; return; }
+  const d = Math.floor(ms/864e5), h = Math.floor(ms%864e5/36e5), m = Math.floor(ms%36e5/6e4);
+  $("#countdown").textContent = (d?d+"d ":"")+h+"h "+m+"m";
+}
+setInterval(tickCountdown, 30000); tickCountdown();
+
+document.querySelectorAll(".filters button[data-pos]").forEach(b=>b.onclick=()=>{
+  posFilter = +b.dataset.pos;
+  document.querySelectorAll(".filters button[data-pos]").forEach(x=>x.classList.toggle("on", x===b));
+  renderMarket();
+});
+$("#search").oninput = e => { search = e.target.value.toLowerCase(); renderMarket(); };
+$("#maxprice").onchange = e => { maxPrice = +e.target.value; renderMarket(); };
+document.querySelectorAll("table.players th[data-k]").forEach(th=>th.onclick=()=>{
+  const k = th.dataset.k;
+  if (sortKey===k) sortDir *= -1; else { sortKey = k; sortDir = (k==="name"||k==="pos") ? 1 : -1; }
+  renderMarket();
+});
+$("#duelA").onchange = renderDuel; $("#duelB").onchange = renderDuel;
+$("#sim1").onclick = runOne; $("#sim100").onclick = run100;
+
+function renderAll(){ renderMarket(); renderSquad(); }
+renderAll(); renderFix(); renderLessons();
+</script>
+</body>
+</html>
