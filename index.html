@@ -177,7 +177,7 @@
   <div class="builder">
     <div class="card">
       <h2>Player market</h2>
-      <div class="sub">Tap a player to add them to your squad. Tap again to remove. <b>Guess pts</b> is this week only; <b>3-wk pts</b> looks three games ahead — a player with a hard game NOW but easy games NEXT might be worth planning for!</div>
+      <div class="sub">Tap a player to add them to your squad. Tap again to remove. <b>Guess pts</b> is this week only; <b>3-wk pts</b> looks three games ahead — a player with a hard game NOW but easy games NEXT might be worth planning for! And now the season has started, <b>Real pts</b> shows what actually happened — compare it with the guesses.</div>
       <div class="filters">
         <button data-pos="0" class="on">All</button>
         <button data-pos="1">GK</button>
@@ -200,6 +200,7 @@
           <th data-k="pos">Pos</th>
           <th data-k="price" class="num">Price</th>
           <th data-k="sel" title="How many managers in the world picked them">Crowd&nbsp;%</th>
+          <th data-k="pts" title="Points actually scored so far this season">Real&nbsp;pts</th>
           <th data-k="ep" title="FPL's guess at next-match points">Guess&nbsp;pts</th>
           <th data-k="val" title="Guess points per £1m — bang for your buck">Value</th>
           <th data-k="p3" title="Our own mini model: the one-week guess re-adjusted for each of the next 3 fixtures' difficulty">3-wk&nbsp;pts</th>
@@ -298,38 +299,39 @@
     <p>Averages and expected value → value for money (ratios) → probability as long-run counting → variance and distributions → sample size ("one great week proves nothing") → wisdom of the crowd (ownership %) → process vs luck. Each lesson card in "Learn the maths" matches one of these and ends with a question to talk about together.</p>
     <h3>Honest notes on the data</h3>
     <p><b>The 3-wk pts column is our own mini model</b> — and a lovely thing to build understanding around. We take FPL's one-week guess, strip out the effect of the next fixture's difficulty (÷ its multiplier), then re-apply a multiplier for each of the next three fixtures (easy ×1.15, medium ×1.0, hard ×0.85, very hard ×0.7) and add them up. Walk him through it once — it's exactly how your solver thinks about a horizon, in miniature, and it shows him that models are built by people making reasonable assumptions, not magic.</p>
-    <p>Player list, prices, ownership and "guess points" come from the official FPL API (top 150 most-picked players); fixture difficulty is FPL's official FDR. Early-season guess points are crude — a fun discussion in itself: "Why might the computer's guess be bad in week 1?" (Small sample!) Ask Claude to refresh this dashboard with new data whenever you like — or set up a weekly refresh.</p>
+    <p>Player list, prices, ownership and "guess points" come from the official FPL API (top 150 most-picked players); fixture difficulty is FPL's official FDR. Early-season guess points are crude — a fun discussion in itself: "Why might the computer's guess be bad so early?" (Small sample!) The site now refreshes its own data every morning: a small scheduled robot (a GitHub Action) fetches the FPL API and updates the page — just open it and it's current.</p>
   </div>
 </section>
 
 <div class="toast" id="toast"></div>
-<footer>Data: official Fantasy Premier League API, 20 Aug 2026 · 2026/27 season · Built for a 9-year-old scientist and his dad.</footer>
+<footer>Data: official Fantasy Premier League API · updated <span id="updated">—</span> · 2026/27 season · Built for a 9-year-old scientist and his dad.</footer>
 
 <script>
-/* ================= DATA (FPL API snapshot, 20 Aug 2026) ================= */
-const TEAMS = {1:["Arsenal","ARS"],2:["Aston Villa","AVL"],3:["Bournemouth","BOU"],4:["Brentford","BRE"],5:["Brighton","BHA"],6:["Chelsea","CHE"],7:["Coventry City","COV"],8:["Crystal Palace","CRY"],9:["Everton","EVE"],10:["Fulham","FUL"],11:["Hull City","HUL"],12:["Ipswich Town","IPS"],13:["Leeds","LEE"],14:["Liverpool","LIV"],15:["Man City","MCI"],16:["Man Utd","MUN"],17:["Newcastle","NEW"],18:["Nott'm Forest","NFO"],19:["Spurs","TOT"],20:["Sunderland","SUN"]};
+/* ================= DATA ================= */
 const POS = {1:"GK",2:"DEF",3:"MID",4:"FWD"};
-const DEADLINE = new Date("2026-08-21T17:30:00Z");
-/* [name, teamId, pos, price£m, crowd%, guessPts] */
-const P = [["Haaland",15,4,15.5,69.5,4],["João Pedro",6,4,7.5,61.7,2.3],["B.Fernandes",16,3,12,49.8,4],["Szoboszlai",14,3,7,41.4,2.5],["Raya",1,1,6,35.8,4],["Mbeumo",16,3,8,33.4,2.8],["Calafiori",1,2,5.5,31.2,2.5],["Gabriel",1,2,8,29.4,4],["Calvert-Lewin",13,4,6,28.6,2],["Semenyo",15,3,8.5,26.5,2.9],["Rogers",6,3,7.5,26,2.6],["Pedro Porro",19,2,5.5,22.8,2.5],["Kinsky",19,1,4.5,21.9,1.9],["Shaw",16,2,4.5,21.7,1.7],["O'Reilly",15,2,6.5,21.5,3.1],["Dubravka",19,1,4,21.1,1],["Verbruggen",5,1,4.5,19.7,1.9],["Rice",1,3,7.5,19.3,2.6],["Guéhi",15,2,6,19.1,2.8],["Tzolis",1,3,6.5,18.6,2.3],["Virgil",14,2,6.5,18.5,3.1],["Diop",12,2,4,18,1],["Thiago",4,4,8,17.9,2.5],["Lammens",16,1,5,17.8,2.6],["Konsa",2,2,4.5,16.1,1.7],["Isak",14,4,9,16.1,2.7],["Ndiaye",9,3,6,15.8,2.1],["Brobbey",20,4,6,14.9,2],["Maguire",16,2,5,14.5,2.2],["van Ewijk",7,2,4,14.3,1],["Wirtz",14,3,7.5,14.1,2.6],["Groß",5,3,5.5,13.1,2],["Gibbs-White",18,3,8,12,2.8],["Watkins",2,4,8,11.7,2.5],["E.Le Fée",20,3,6,11.5,2.1],["Gvardiol",15,2,5.5,11.4,2.5],["Hughes",8,3,4.5,11.3,1],["Cunha",16,3,8,10.9,2.8],["N.Williams",18,2,5,10.7,2.2],["Palmer",6,3,9.5,10.6,3.2],["Muñoz",8,2,5.5,10.5,2.5],["Gyökeres",1,4,7.5,10.2,2.3],["Lacroix",6,2,6,10.1,2.8],["Mosquera",1,2,5.5,9.4,2.5],["Saka",1,3,9.5,9.4,3.2],["Tarkowski",9,2,6,9.4,2.8],["James",6,2,5.5,9.2,2.5],["Van Hecke",19,2,5,9.2,2.2],["Senesi",19,2,6,9.1,2.8],["Donnarumma",15,1,5.5,9,3.3],["Anderson",15,3,6.5,9,2.3],["Bruno G.",1,3,7,8.5,2.5],["Cash",2,2,4.5,8.5,1.7],["Pickford",9,1,5.5,8.3,3.3],["Cherki",15,3,7.5,7.9,2.6],["Thomas",7,2,4,7.8,1],["Kusi-Asare",10,4,4.5,7.4,1],["Van de Ven",19,2,5,7.3,2.2],["Wilson",13,3,6.5,7,2.3],["Mitchell",8,2,4.5,6.6,1.7],["Ødegaard",1,3,6.5,6.4,2.3],["Hume",20,2,4.5,6.2,1.7],["Mateta",8,4,6.5,6,2.1],["Kelleher",4,1,5,5.9,2.6],["Sarr",8,3,6.5,5.7,2.3],["Davis",12,2,4,5.2,1],["Enzo",6,3,7,5.1,2.5],["Palmer",12,1,4,5.1,1],["Truffert",3,2,5.5,4.8,2.5],["Igor Jesus",18,4,6,4.8,2],["Ballard",20,2,5,4.8,2.2],["Havertz",1,4,7.5,4.7,2.3],["Roefs",20,1,5,4.7,2.6],["Martinez",2,1,5,4.6,2.6],["Xhaka",20,3,5.5,4.6,2],["Foden",15,3,7,4.5,2.5],["Steele",5,1,4,4.3,1],["Kerkez",14,2,5.5,4.1,2.5],["Tonali",19,3,5.5,4.1,2],["Caicedo",6,3,5.5,3.9,2],["Aina",18,2,4.5,3.9,1.7],["A.Becker",14,1,5.5,3.7,3.3],["Gakpo",14,3,7,3.6,2.5],["Hall",17,2,5,3.6,2.2],["White",1,2,5.5,3.5,2.5],["Petrović",3,1,4.5,3.5,1.9],["Kayode",4,2,4.5,3.4,1.7],["Schade",4,3,6,3.4,2.1],["Dewsbury-Hall",9,3,6.5,3.4,2.3],["Frimpong",14,2,5.5,3.3,2.5],["Robertson",19,2,4.5,3.3,1.7],["O'Nien",20,2,4,3.3,1],["McGinn",2,3,5.5,3.2,2],["Forster",3,1,4,3.2,1],["Henderson",8,1,5,3.2,2.6],["Leno",10,1,4.5,3.2,1.9],["O'Shea",12,2,4,3.2,1],["F.Kadıoğlu",5,2,4.5,3.1,1.7],["Rayan",3,3,6.5,3,2.3],["Gomez",5,3,5,2.9,1.5],["Beto",9,4,5.5,2.9,1.8],["Muharemović",13,2,5,2.9,2.2],["Trafford",13,1,5,2.9,2.6],["Dalot",16,2,5,2.9,2.2],["Palestra",6,2,5.5,2.8,2.5],["Rodon",13,2,4.5,2.8,1.7],["Richarlison",19,4,6,2.8,2],["Sangaré",4,3,5.5,2.7,2],["Targett",11,2,4,2.7,1],["Vuskovic",5,2,5,2.6,2.2],["Ajer",4,2,4.5,2.5,1.7],["Slater",11,3,4.5,2.5,1],["Burn",17,2,5,2.5,2.2],["Hincapie",1,2,5.5,2.4,2.5],["Eze",1,3,6.5,2.3,2.3],["Jacquet",14,2,5,2.3,2.2],["Tielemans",16,3,6,2.3,2.1],["Evanilson",3,4,6,2.2,2],["Sánchez",6,1,5,2.2,2.6],["Walle Egeli",12,4,4.5,2.2,1],["Fernandes",19,3,6,2.2,2.1],["Welbeck",6,4,6,2.1,2],["Milenković",18,2,5.5,2.1,2.5],["Collins",4,2,5.5,2,2.5],["Gonzalo",10,4,6,2,2],["Dovin",7,1,4,1.9,1],["Robinson",10,2,4.5,1.9,1.7],["Gravenberch",14,3,6,1.9,2.1],["Araujo",14,2,5.5,1.9,2.5],["Branthwaite",9,2,5.5,1.8,2.5],["Mac Allister",14,3,5.5,1.8,2],["Khusanov",15,2,5.5,1.8,2.5],["Thiaw",17,2,5,1.8,2.2],["Wood",18,4,6,1.8,2],["A.García",2,2,4,1.7,1],["Tavernier",3,3,6,1.7,2.1],["De Cuyper",5,2,4.5,1.7,1.7],["Colwill",6,2,5,1.7,2.2],["Matthews",8,1,4,1.7,1],["Keane",9,2,5,1.7,2.2],["Phillips",11,1,4,1.7,1],["Egan",11,2,4,1.7,1],["Woltemade",17,4,6,1.7,2],["Rúben",15,2,5.5,1.6,2.5],["Amad",16,3,6,1.6,2.1],["Wissa",17,4,6,1.6,2],["Sels",18,1,5,1.6,2.6],["Solanke",19,4,6,1.6,2],["Scarlett",19,4,4.5,1.6,1],["Scott",3,3,6,1.5,2.1]];
-/* per team: next 5 fixtures [oppId, home?, difficulty, gw] */
-const FIX = {1:[[7,1,2,1],[2,0,4,2],[6,1,4,3],[20,0,3,4],[5,0,3,5]],2:[[5,0,3,1],[1,1,4,2],[11,0,2,3],[18,1,3,4],[19,0,3,5]],3:[[15,0,5,1],[9,1,3,2],[17,0,3,3],[4,1,3,4],[14,1,4,5]],4:[[19,1,3,1],[13,0,3,2],[20,1,2,3],[3,0,3,4],[6,1,4,5]],5:[[2,1,3,1],[6,0,4,2],[13,1,2,3],[7,0,2,4],[1,1,4,5]],6:[[10,0,3,1],[5,1,2,2],[1,0,5,3],[11,1,2,4],[4,0,3,5]],7:[[1,0,5,1],[11,1,2,2],[15,0,5,3],[5,1,2,4],[18,0,3,5]],8:[[9,0,3,1],[15,1,4,2],[10,0,3,3],[12,1,2,4],[13,0,3,5]],9:[[8,1,3,1],[3,0,3,2],[16,1,4,3],[19,0,3,4],[12,1,2,5]],10:[[6,1,4,1],[20,0,3,2],[8,1,3,3],[14,0,4,4],[16,1,4,5]],11:[[16,1,4,1],[7,0,2,2],[2,1,3,3],[6,0,4,4],[17,0,3,5]],12:[[20,1,2,1],[16,0,4,2],[14,1,4,3],[8,0,3,4],[9,0,3,5]],13:[[18,0,3,1],[4,1,3,2],[5,0,3,3],[17,1,2,4],[8,1,3,5]],14:[[17,0,3,1],[18,1,3,2],[12,0,2,3],[10,1,2,4],[3,0,3,5]],15:[[3,1,3,1],[8,0,3,2],[7,1,2,3],[16,0,4,4],[20,1,2,5]],16:[[11,0,2,1],[12,1,2,2],[9,0,3,3],[15,1,4,4],[10,0,3,5]],17:[[14,1,4,1],[19,0,3,2],[3,1,3,3],[13,0,3,4],[11,1,2,5]],18:[[13,1,2,1],[14,0,4,2],[19,1,3,3],[2,0,4,4],[7,1,2,5]],19:[[4,0,3,1],[17,1,2,2],[18,0,3,3],[9,1,3,4],[2,1,3,5]],20:[[12,0,2,1],[10,1,2,2],[4,0,3,3],[1,1,4,4],[15,0,5,5]]};
-
-/* players get stable ids; disambiguate duplicate display names by team */
-const nameCount = {};
-P.forEach(p=>{ nameCount[p[0]] = (nameCount[p[0]]||0)+1; });
+/* Embedded fallback snapshot — used only if data.json cannot be loaded (e.g. opening the file directly) */
+const FALLBACK = {"updated":"2026-08-27","gw":{"id":2,"name":"Gameweek 2","deadline":"2026-08-28T17:30:00Z"},"teams":{"1":["Arsenal","ARS"],"2":["Aston Villa","AVL"],"3":["Bournemouth","BOU"],"4":["Brentford","BRE"],"5":["Brighton","BHA"],"6":["Chelsea","CHE"],"7":["Coventry City","COV"],"8":["Crystal Palace","CRY"],"9":["Everton","EVE"],"10":["Fulham","FUL"],"11":["Hull City","HUL"],"12":["Ipswich Town","IPS"],"13":["Leeds","LEE"],"14":["Liverpool","LIV"],"15":["Man City","MCI"],"16":["Man Utd","MUN"],"17":["Newcastle","NEW"],"18":["Nott'm Forest","NFO"],"19":["Spurs","TOT"],"20":["Sunderland","SUN"]},"players":[["Haaland",15,4,15.5,68.1,4,2],["João Pedro",6,4,7.6,67.2,2.4,11],["B.Fernandes",16,3,12,48.8,4,2],["Szoboszlai",14,3,7,43,2.5,8],["Calafiori",1,2,5.6,41.5,2.6,9],["Raya",1,1,6,38.2,4,6],["Mbeumo",16,3,8,36.3,2.8,2],["Gabriel",1,2,8,29.3,4,5],["Calvert-Lewin",13,4,6,29.1,2,1],["Tzolis",1,3,6.5,25.9,2.3,6],["Rogers",6,3,7.5,25.9,2.6,8],["Semenyo",15,3,8.5,24.6,2.9,2],["Kinsky",19,1,4.5,22.9,1.9,2],["Verbruggen",5,1,4.5,21.5,1.9,6],["O'Reilly",15,2,6.5,21,3.1,2],["Shaw",16,2,4.5,19.8,1.7,1],["Virgil",14,2,6.5,19.6,3.1,2],["Guéhi",15,2,6,19.2,2.8,10],["Dubravka",19,1,4,18.7,1,0],["Diop",12,2,4,17.3,1,2],["Rice",1,3,7.5,17.2,2.6,3],["Maguire",16,2,5,17.2,2.2,1],["Thiago",4,4,8,16.8,2.5,0],["Isak",14,4,9,16.5,2.7,2],["Ndiaye",9,3,6,16,2.2,9],["Lammens",16,1,5,15.7,2.6,1],["Palmer",6,3,9.5,14.6,3.2,13],["Pedro Porro",19,2,5.5,13.7,2.5,0],["van Ewijk",7,2,4,13.2,1,1],["Gvardiol",15,2,5.5,13.2,2.5,9],["Groß",5,3,5.5,13.1,2,2],["Brobbey",20,4,6,13.1,2,2],["Wirtz",14,3,7.5,11.7,2.6,2],["Ødegaard",1,3,6.5,11.2,2.3,11],["Konsa",1,2,4.5,11.1,1.7,0],["Hughes",8,3,4.5,11,1,0],["Saka",1,3,9.5,10.4,3.2,9],["Cherki",15,3,7.5,10.2,2.6,8],["James",6,2,5.5,10.1,2.5,0],["Van Hecke",19,2,5,9.8,2.2,1],["Lacroix",6,2,6,9.5,2.8,6],["Cunha",16,3,8,9.5,2.8,2],["N.Williams",18,2,5,9.2,2.2,2],["E.Le Fée",20,3,6,9,2.2,2],["Pickford",9,1,5.5,8.8,3.3,7],["Tarkowski",9,2,6,8.8,2.8,6],["Muñoz",8,2,5.5,8.6,2.5,0],["Watkins",2,4,7.9,8.4,2.4,0],["Donnarumma",15,1,5.5,8.3,3.3,3],["Cash",2,2,4.5,7.9,1.7,-1],["Thomas",7,2,4,7.9,1,3],["Senesi",19,2,6,7.7,2.8,3],["M.Sangaré",4,3,5.6,7.6,2,14],["Havertz",1,4,7.5,7.3,2.4,6],["Gyökeres",1,4,7.4,7.2,2.3,0],["De Cuyper",5,2,4.6,7,1.9,17],["Kusi-Asare",10,4,4.5,7,1,0],["Kayode",4,2,4.6,6.9,1.9,13],["Hume",20,2,4.5,6.5,1.7,2],["Kelleher",4,1,5,6.4,2.6,7],["White",1,2,5.5,6.3,2.5,11],["Anderson",15,3,6.5,6.3,2.3,2],["Mosquera",1,2,5.5,5.9,2.5,6],["Wilson",13,3,6.5,5.8,2.3,3],["Mitchell",8,2,4.5,5.7,1.7,1],["Gakpo",14,3,7,5.7,2.5,12],["Mateta",8,4,6.5,5.3,2.1,2],["Ballard",20,2,5,5.2,2.2,0],["Davis",12,2,4,5,1,2],["Enzo",6,3,7,4.7,2.5,1],["Xhaka",20,3,5.5,4.6,2,9],["Dewsbury-Hall",9,3,6.5,4.5,2.3,11],["Palmer",12,1,4,4.5,1,0],["Truffert",3,2,5.5,4.3,2.5,1],["Van de Ven",19,2,5,4.3,2.2,0],["Martinez",2,1,5,4.1,2.6,0],["Trafford",13,1,5,4.1,2.6,9],["Foden",15,3,7,4.1,2.5,1],["Hall",17,2,5,4.1,2.2,3],["Steele",5,1,4,4,1,0],["Roefs",20,1,5,4,2.6,1],["Ajer",4,2,4.5,3.9,1.7,8],["Igor Jesus",18,4,6,3.9,2,2],["Gomez",5,3,5,3.8,1.5,6],["A.Becker",14,1,5.5,3.8,3.3,2],["Tonali",19,3,5.5,3.8,2,2],["Robertson",19,2,4.5,3.8,1.7,3],["Slater",11,3,4.5,3.7,1,6],["Rodon",13,2,4.5,3.6,1.7,6],["Kerkez",14,2,5.5,3.6,2.5,0],["Schade",4,3,6,3.5,2.2,3],["Aina",18,2,4.5,3.5,1.7,5],["O'Nien",20,2,4,3.5,1,1],["O'Shea",12,2,4,3.4,1,4],["Muharemović",13,2,5,3.4,2.2,6],["Frimpong",14,2,5.5,3.4,2.5,0],["Petrović",3,1,4.5,3.3,1.9,2],["Forster",3,1,4,3.2,1,0],["Gonzalo",10,4,6,3.2,2,6],["Mendy",11,2,4,3.1,1,15],["Leno",10,1,4.5,3,1.9,2],["Wissa",17,4,6,3,2,4],["McGinn",2,3,5.5,2.9,2,1],["Richarlison",19,4,6,2.9,2,2],["Rayan",3,3,6.5,2.8,2.3,2],["Evanilson",3,4,6,2.8,2,4],["Barry",9,4,5.5,2.8,1.8,8],["Araujo",14,2,5.5,2.7,2.5,1],["Mukiele",20,2,5.5,2.6,2.5,0],["Hinshelwood",5,3,6,2.5,2.2,16],["Vuskovic",5,2,5,2.5,2.2,6],["Dalot",16,2,5,2.5,2.2,1],["Beto",9,4,5.5,2.4,1.8,1],["Tzolakis",11,1,4.5,2.4,1.9,10],["Walle Egeli",12,4,4.5,2.4,1,1],["Jacquet",14,2,5,2.4,2.2,1],["Tielemans",16,3,6,2.4,2.2,2],["Sánchez",6,1,5,2.3,2.6,2],["Targett",11,2,4,2.3,1,1],["Tavernier",3,3,6,2.2,2.2,10],["Collins",4,2,5.5,2.1,2.5,6],["Egan",11,2,4,2,1,8],["McBurnie",11,4,5.5,2,1.8,5],["Stach",13,3,6,2,2.2,13],["Gravenberch",14,3,6,2,2.2,5],["Henderson",8,1,5,1.9,2.6,2],["Milenković",18,2,5.5,1.9,2.5,2],["Eze",1,3,6.5,1.8,2.3,1],["Matthews",8,1,4,1.8,1,0],["Branthwaite",9,2,5.5,1.8,2.5,6],["Rúben",15,2,5.5,1.8,2.5,2],["Khusanov",15,2,5.5,1.8,2.5,2],["Elanga",17,3,6,1.8,2.2,9],["A.García",2,2,4,1.7,1,0],["Robinson",10,2,4.5,1.7,1.7,1],["Rashford",16,3,7,1.7,2.5,1],["Šeško",16,4,7,1.7,2.2,1],["Thiaw",17,2,5,1.7,2.2,3],["Murillo",18,2,5.5,1.7,2.5,4],["Fernandes",19,3,6,1.7,2.2,1],["Scarlett",19,4,4.5,1.7,1,0],["Colwill",6,2,5,1.6,2.2,0],["Dovin",7,1,4,1.6,1,0],["Mykolenko",9,2,4.5,1.6,1.7,6],["Emersonn",12,4,5.5,1.6,1.8,9],["Mac Allister",14,3,5.5,1.6,2,1],["Woltemade",17,4,6,1.6,2,0],["Wood",18,4,6,1.6,2,1],["Hincapie",1,2,5.5,1.5,2.5,1],["Scott",3,3,6,1.5,2.2,2]],"fix":{"1":[[2,0,4,2],[6,1,4,3],[20,0,3,4],[5,0,3,5],[13,1,2,6]],"2":[[1,1,4,2],[11,0,2,3],[18,1,3,4],[19,0,3,5],[4,1,3,6]],"3":[[9,1,3,2],[17,0,3,3],[4,1,3,4],[14,1,4,5],[6,0,4,6]],"4":[[13,0,3,2],[20,1,2,3],[3,0,3,4],[6,1,4,5],[2,0,4,6]],"5":[[6,0,4,2],[13,1,2,3],[7,0,2,4],[1,1,4,5],[20,0,3,6]],"6":[[5,1,2,2],[1,0,5,3],[11,1,2,4],[4,0,3,5],[3,1,3,6]],"7":[[11,1,2,2],[15,0,5,3],[5,1,2,4],[18,0,3,5],[17,1,2,6]],"8":[[15,1,4,2],[10,0,3,3],[12,1,2,4],[13,0,3,5],[18,1,3,6]],"9":[[3,0,3,2],[16,1,4,3],[19,0,3,4],[12,1,2,5],[11,0,2,6]],"10":[[20,0,3,2],[8,1,3,3],[14,0,4,4],[16,1,4,5],[12,0,2,6]],"11":[[7,0,2,2],[2,1,3,3],[6,0,4,4],[17,0,3,5],[9,1,3,6]],"12":[[16,0,4,2],[14,1,4,3],[8,0,3,4],[9,0,3,5],[10,1,2,6]],"13":[[4,1,3,2],[5,0,3,3],[17,1,2,4],[8,1,3,5],[1,0,5,6]],"14":[[18,1,3,2],[12,0,2,3],[10,1,2,4],[3,0,3,5],[15,1,4,6]],"15":[[8,0,3,2],[7,1,2,3],[16,0,4,4],[20,1,2,5],[14,0,4,6]],"16":[[12,1,2,2],[9,0,3,3],[15,1,4,4],[10,0,3,5],[19,1,3,6]],"17":[[19,0,3,2],[3,1,3,3],[13,0,3,4],[11,1,2,5],[7,0,2,6]],"18":[[14,0,4,2],[19,1,3,3],[2,0,4,4],[7,1,2,5],[8,0,3,6]],"19":[[17,1,2,2],[18,0,3,3],[9,1,3,4],[2,1,3,5],[16,0,4,6]],"20":[[10,1,2,2],[4,0,3,3],[1,1,4,4],[15,0,5,5],[5,1,2,6]]}};
+let TEAMS={}, FIX={}, PLAYERS=[], DEADLINE=null, GWNAME="Gameweek";
 /* difficulty multiplier for our mini 3-week model: easy games boost the guess, hard games shrink it */
 const DMULT = {2:1.15, 3:1.0, 4:0.85, 5:0.7};
 function proj3(teamId, ep){
-  const fx = FIX[teamId].slice(0,3);
+  const fx = (FIX[teamId]||[]).slice(0,3);
   if (!fx.length) return ep*3;
   const neutral = ep / DMULT[fx[0][2]];             // remove next game's fixture effect
   return fx.reduce((s,f)=> s + neutral*DMULT[f[2]], 0); // re-apply it for each of the 3 fixtures
 }
-const PLAYERS = P.map((p,i)=>({
-  id:i, name:p[0], dname: nameCount[p[0]]>1 ? p[0]+" ("+TEAMS[p[1]][1]+")" : p[0],
-  team:p[1], pos:p[2], price:p[3], sel:p[4], ep:p[5], val: p[5]/p[3], p3: proj3(p[1], p[5])
-}));
+function applyData(d){
+  TEAMS = d.teams; FIX = d.fix;
+  DEADLINE = new Date(d.gw.deadline); GWNAME = d.gw.name;
+  const nameCount = {};
+  d.players.forEach(p=>{ nameCount[p[0]] = (nameCount[p[0]]||0)+1; });
+  PLAYERS = d.players.map((p,i)=>({
+    id:i, name:p[0], dname: nameCount[p[0]]>1 ? p[0]+" ("+TEAMS[p[1]][1]+")" : p[0],
+    team:p[1], pos:p[2], price:p[3], sel:p[4], ep:p[5], pts:p[6]||0, val: p[5]/p[3], p3: proj3(p[1], p[5])
+  }));
+  document.getElementById("dl-label").textContent = GWNAME + " deadline";
+  const u = document.getElementById("updated"); if (u && d.updated) u.textContent = d.updated;
+}
 
 /* ================= STATE ================= */
 const squad = new Set();     // player ids
@@ -378,6 +380,7 @@ function renderMarket(){
       <td>${POS[p.pos]}</td>
       <td class="num">£${fmt1(p.price)}m</td>
       <td class="num"><span class="crowdbar"><i style="width:${Math.min(100,p.sel)}%"></i></span>${fmt1(p.sel)}%</td>
+      <td class="num">${p.pts}</td>
       <td class="num">${fmt1(p.ep)}</td>
       <td class="num">${(p.val).toFixed(2)}</td>
       <td class="num"><b>${fmt1(p.p3)}</b></td>
@@ -611,8 +614,9 @@ function showTab(t){
 }
 document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>showTab(b.dataset.t));
 function tickCountdown(){
+  if (!DEADLINE) return;
   const ms = DEADLINE - new Date();
-  if (ms <= 0) { $("#countdown").textContent = "Deadline passed — good luck!"; $("#dl-label").textContent="Gameweek 1"; return; }
+  if (ms <= 0) { $("#countdown").textContent = "Deadline passed — good luck!"; $("#dl-label").textContent=GWNAME; return; }
   const d = Math.floor(ms/864e5), h = Math.floor(ms%864e5/36e5), m = Math.floor(ms%36e5/6e4);
   $("#countdown").textContent = (d?d+"d ":"")+h+"h "+m+"m";
 }
@@ -634,7 +638,13 @@ $("#duelA").onchange = renderDuel; $("#duelB").onchange = renderDuel;
 $("#sim1").onclick = runOne; $("#sim100").onclick = run100;
 
 function renderAll(){ renderMarket(); renderSquad(); }
-renderAll(); renderFix(); renderLessons();
+async function init(){
+  let data = FALLBACK;
+  try { const r = await fetch("data.json", {cache:"no-store"}); if (r.ok) data = await r.json(); } catch(e){}
+  applyData(data);
+  renderAll(); renderFix(); renderLessons(); tickCountdown();
+}
+init();
 </script>
 </body>
 </html>
