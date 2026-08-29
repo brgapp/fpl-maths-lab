@@ -1,0 +1,18 @@
+name: Refresh FPL data
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node build-data.js
+      - run: |
+          git config user.name fpl-bot
+          git config user.email actions@users.noreply.github.com
+          git add data.json
+          git diff --cached --quiet || (git commit -m "Refresh FPL data" && git push)
